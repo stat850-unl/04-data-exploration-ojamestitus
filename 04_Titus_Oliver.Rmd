@@ -11,7 +11,7 @@ options(digits = 3)
 
 
 ```{r load-sas-libraries, echo = F, message = F, warning = F}
-
+library(knitr)
 library(SASmarkdown)
 sas_enginesetup(sashtml=sashtml)
 
@@ -55,15 +55,54 @@ You may want to include graphics (using the sample code in the book, or the [R G
 ### R
 (You don't need to keep these headings, but I want you to have a skeleton of what the code chunks should look like)
 
-```{r}
+## Summary Statistics
+```{r summary}
 library(readr)
+library(knitr)
+library(skimr)
 data <- read_csv("https://github.com/srvanderplas/unl-stat850/raw/master/data/General_Payment_Data_Sample.csv")
-
+head(data, 10) %>% kable()
+skim(data)
 ```
+## Plots
+```{r plots}
+library(ggplot2)
+ggplot(data, aes(x=Total_Amount_of_Payment_USDollars)) + geom_histogram(bins = 10) + scale_x_log10() 
+boxplot(log10(Total_Amount_of_Payment_USDollars) ~ Physician_Specialty, data = data)
+boxplot(log10(Total_Amount_of_Payment_USDollars) ~ Product_Category_or_Therapeutic_Area_1, data = data)
+ggplot(data, aes(x=Number_of_Payments_Included_in_Total_Amount)) + geom_dotplot()
+boxplot(log10(Total_Amount_of_Payment_USDollars) ~ Indicate_Drug_or_Biological_or_Device_or_Medical_Supply_1, data = data)
+```
+
+Looking at the histogram, we see that the distribution of payments are somewhat normal. A log scale of base 10 was used to reduce the skew of the data since there are some major outliers in the payment amounts. Removing those outliers yields a somewhat normal histogram.
+
+The box plot categorizes the total amount of payment with physician specialty. We can see that there are many specialties. Some of them have a different spread of the payments than others, so it is likely that the mean payment is different for each specialty. We'll do an ANOVA to confirm this suspicion. I tried using ggplot for this, but I don't think it was able to handle the amount of categories. If we we wanted to have a nicer, more readable box plots, the amount of categories would have to be reduced. Looking in the dataset, many of the categories seem to focus on a specific disease they specialize in like for example, an internal medicine doctor who does cardiovascular disease. It may be better to compare the amount of payments to doctors based on if they are in internal medicine vs. family medicine vs. dermatology, etc. This would reduce the amount of categories.
+
+A box plot for total of payment and product category was also created. This plot has the same issue that there are a lot of categories, but it still gives us a sense as to if there are differences in mean payment based on the product category. An F test is also done to see if this may be the case.
+
+The dot plot shows the distribution for the number of payments. We see that most of them are one payment.
+
+Another box plot was made for whether the product was a drug, biological, device, or medical supply. Looking at the box plots, there are some differences in variation in the total payment between these categories.
+
+Let's look at the ANOVA results for comparing the total amount of payments with physician specialty along with another ANOVA comparing total payment with product category:
+
+## ANOVA
+```{r ANOVA}
+summary(aov(data$Total_Amount_of_Payment_USDollars ~ data$Physician_Specialty))
+summary(aov(data$Total_Amount_of_Payment_USDollars ~ data$Product_Category_or_Therapeutic_Area_1))
+summary(aov(data$Total_Amount_of_Payment_USDollars ~ data$Indicate_Drug_or_Biological_or_Device_or_Medical_Supply_1))
+```
+The first ANOVA returns an overall F-test with an F-value of 4.26 and p-value close to 0.000, meaning there is highly statistically significant evidence that the amount of payments made between each physician is different for at least one specialty.If we were to analyze this data further, based on the large degrees of freedom for the physician specialty, it'd be better to reduce the number of categories so that if we wanted to compare each mean payment for one physician type to another, it would not be so many t-tests and that would also produce results that are easier to summarize.
+
+The ANOVA for product category returns an overall F-test that is highly significant with an F-value of 8.09 and corresponding p-value very close to 0.000. This means that there is high statistical evidence that at least one mean payment for each product category is different. We would run into the same problem analyzing this further in that the degrees of freedom is 599, which is a lot of product categories to compare. If we were to clean up this data, making product categories that are broader may help with this analysis.
+
+The last ANOVA for if the product is a drug, biological, device, or medical supply also returns an overall F-test that is highly significant with an F-value of 28.4. This has a corresponding p-value very close to 0, so there is highly statistically significant evidence that at least one of the mean total payments are different based on these classifications.
 
 ### SAS
 Fill in your code in the chunk below.
-```{r, engine="sashtml", engine.path=sasexe, engine.opts=sasopts, collectcode = T, error = T}
+
+## Contents of the data:
+```{r Data Import and Contents, engine="sashtml", engine.path=sasexe, engine.opts=sasopts, collectcode = T, error = T}
 filename dat "General_Payment_Data_Sample.csv";
 
 PROC IMPORT DATAFILE = dat OUT = openmedpay 
@@ -73,10 +112,80 @@ PROC IMPORT DATAFILE = dat OUT = openmedpay
     GUESSINGROWS = 3500;
 RUN;
 
-```
+DATA openmedpay;
+set openmedpay;
+RUN;
 
-You can delete the information below if you don't need it, but these are handy tricks for using sasmarkdown. 
-```{r tricks, engine="sashtml", engine.path=sasexe, engine.opts=sasopts, error = T}
-/* The collectcode=T option lets you reference data in other chunks, just like in R */
-  
+PROC CONTENTS VARNUM DATA= openmedpay ;
+
+RUN;
+
+
+    
 ```
+PROC contents gives us some more details about the data set. It shows that data type each variable is as well as the format.
+
+## Summary Statistics
+```{r Sumarry Statistics, engine="sashtml", engine.path=sasexe, engine.opts=sasopts, collectcode=T, error = T}
+proc MEANS data=openmedpay;
+run;
+
+proc MEANS data=openmedpay;
+class Indicate_Drug_or_Biological_or_D;
+run;
+```
+The means procedure gives us the summary statistics for numeric values in the dataset. I also made a proc means based on the classification variable "Indicate_Drug_or_Biological_or_Device_or_Medical_Supply_1" since it had the least amount of categories.
+
+## Plots
+```{r Plots, engine="sashtml", engine.path=sasexe, engine.opts=sasopts, collectcode=T, error = T}
+PROC FREQ DATA=openmedpay ORDER=FORMATTED;
+  TABLES Number_of_Payments_Included_in_T/ PLOTS=freqplot(type=dotplot);
+RUN;
+
+proc sgplot data=openmedpay;
+title "Box plot: Payments for each physician type";
+  vbox Total_Amount_of_Payment_USDollar / group=Physician_Specialty;
+run;
+
+proc sgplot data=openmedpay;
+title "Box plot: Payments for each product category";
+  vbox Total_Amount_of_Payment_USDollar / group=Product_Category_or_Therapeutic_;
+run;
+
+proc sgplot data=openmedpay;
+title "Box plot: Payments for drug, biological, or device";
+  vbox Total_Amount_of_Payment_USDollar / group=Indicate_Drug_or_Biological_or_D;
+run;
+
+PROC sgplot  DATA = openmedpay;
+title "Scatter plot: Number of payments vs Total Payment";
+   scatter y=Total_Amount_of_Payment_USDollar x = Number_of_Payments_Included_in_T;
+RUN;
+```
+Here are some plots. Most of them I also did in R and yield the same conclusions. Only difference here is the plot for the number of payments is a frequency plot as opposed to a dot plot. I also added a scatter plot for seeing the relationship between number of payments and the total payment. There appears to be a negative relationship.
+
+## ANOVA
+```{r ANOVAs, engine="sashtml", engine.path=sasexe, engine.opts=sasopts, collectcode=T, error = T}
+PROC ANOVA data= openmedpay;
+title "ANOVA: Total Payment vs. If it's a drug, biological, or device";
+CLASS Indicate_Drug_or_Biological_or_D;
+MODEL  Total_Amount_of_Payment_USDollar= Indicate_Drug_or_Biological_or_D;
+run;
+
+PROC ANOVA data= openmedpay;
+title "ANOVA: Total Payment vs. Physician Specialty";
+CLASS Physician_Specialty;
+MODEL  Total_Amount_of_Payment_USDollar= Physician_Specialty;
+run;
+
+PROC ANOVA data= openmedpay;
+title "ANOVA: Total Payment vs. Product Category";
+CLASS Product_Category_or_Therapeutic_;
+MODEL  Total_Amount_of_Payment_USDollar= Product_Category_or_Therapeutic_;
+run;
+```
+Looking at these ANOVAs, they yield the same conclusions that were made in the R code, however, the F-Values are not the same, but they sill correspond to p-values less than 0.05. I wonder if R and SAS have different ways of calculating the F-value at least for the ANOVA procedure.
+
+In terms of comparing R and SAS, I think R is much easier for certain tasks in that there seems to be less coding, but SAS does seem to have its advantages as well. The plots look better in SAS in my opinion and the output in SAS for the ANOVAs has more detail than R in that it list all the categories associated with that ANOVA.
+
+If we wanted to do a more concise analysis, the amount of product categories and physician specialties would need to be reduced since those variable seem to be important for the total payments. We see in the output for the ANOVAs in SAS that there are 191 physician specialties and 599 product categories which is a lot and would make comparing those means a very tedious task.
