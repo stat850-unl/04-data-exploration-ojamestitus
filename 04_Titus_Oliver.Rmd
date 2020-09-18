@@ -186,6 +186,10 @@ run;
 ```
 Looking at these ANOVAs, they yield the same conclusions that were made in the R code, however, the F-Values are not the same, but they sill correspond to p-values less than 0.05. I wonder if R and SAS have different ways of calculating the F-value at least for the ANOVA procedure.
 
+> Yes. R uses a different sum of squares calculation than SAS. https://rcompanion.org/rcompanion/d_04.html
+
 In terms of comparing R and SAS, I think R is much easier for certain tasks in that there seems to be less coding, but SAS does seem to have its advantages as well. The plots look better in SAS in my opinion and the output in SAS for the ANOVAs has more detail than R in that it list all the categories associated with that ANOVA.
+
+> Once you learn how to customize plots in R (and clean up the data a bit) I think your opinion might change :) But I agree, right now, SAS defaults are a bit better. Part of that is that SAS limits the length of variable names by default, where R will let you use any variable names. 
 
 If we wanted to do a more concise analysis, the amount of product categories and physician specialties would need to be reduced since those variable seem to be important for the total payments. We see in the output for the ANOVAs in SAS that there are 191 physician specialties and 599 product categories which is a lot and would make comparing those means a very tedious task.
